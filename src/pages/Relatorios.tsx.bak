@@ -1,0 +1,446 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { trpc } from "../lib/trpc";
+import { Button } from "../components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import { Calendar } from "../components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "../components/ui/popover";
+import { cn } from "../lib/utils";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import {
+  BarChart3,
+  TrendingUp,
+  Users,
+  DollarSign,
+  Calendar as CalendarIcon,
+  Download,
+} from "lucide-react";
+
+export default function Relatorios() {
+  const [clinicaId] = useState(1); // TODO: Obter da sessão
+  const [periodoSelecionado, setPeriodoSelecionado] = useState("mes");
+  const [dataInicio, setDataInicio] = useState<Date>(
+    new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+  );
+  const [dataFim, setDataFim] = useState<Date>(new Date());
+
+  // Calcular datas baseado no período selecionado
+  const calcularPeriodo = (periodo: string) => {
+    const hoje = new Date();
+    let inicio = new Date();
+
+    switch (periodo) {
+      case "semana":
+        inicio.setDate(hoje.getDate() - 7);
+        break;
+      case "mes":
+        inicio.setMonth(hoje.getMonth() - 1);
+        break;
+      case "trimestre":
+        inicio.setMonth(hoje.getMonth() - 3);
+        break;
+      case "ano":
+        inicio.setFullYear(hoje.getFullYear() - 1);
+        break;
+      default:
+        inicio = dataInicio;
+    }
+
+    return { inicio, fim: periodo === "personalizado" ? dataFim : hoje };
+  };
+
+  const periodo = calcularPeriodo(periodoSelecionado);
+
+  // Carregar relatório financeiro
+  const { data: relatorioFinanceiro, isLoading: loadingFinanceiro } = trpc.relatorios.financeiro.useQuery(
+    {
+      clinicaId: clinicaId!,
+      dataInicio: periodo.inicio,
+      dataFim: periodo.fim,
+    },
+    { enabled: !!clinicaId }
+  );
+
+  // Carregar relatório de produtividade
+  const { data: relatorioProdutividade, isLoading: loadingProdutividade } = trpc.relatorios.produtividade.useQuery(
+    {
+      clinicaId: clinicaId!,
+      dataInicio: periodo.inicio,
+      dataFim: periodo.fim,
+    },
+    { enabled: !!clinicaId }
+  );
+
+  // Carregar relatório de utentes
+  const { data: relatorioUtentes, isLoading: loadingUtentes } = trpc.relatorios.utentes.useQuery(
+    {
+      clinicaId: clinicaId!,
+      dataInicio: periodo.inicio,
+      dataFim: periodo.fim,
+    },
+    { enabled: !!clinicaId }
+  });
+
+  // Formatar moeda
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("pt-PT", {
+      style: "currency",
+      currency: "EUR",
+    }).format(value);
+  };
+
+  // Exportar relatório
+  const handleExportar = () => {
+    // TODO: Implementar exportação para PDF/Excel
+    alert("Funcionalidade de exportação em desenvolvimento");
+  };
+
+  const isLoading = loadingFinanceiro || loadingProdutividade || loadingUtentes;
+
+  return (
+    <div className="space-y-6">
+      {/* Cabeçalho */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Relatórios</h1>
+          <p className="text-muted-foreground">
+            Análises e estatísticas da clínica
+          </p>
+        </div>
+        <Button onClick={handleExportar}>
+          <Download className="h-4 w-4 mr-2" />
+          Exportar
+        </Button>
+      </div>
+
+      {/* Filtros */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-wrap gap-4">
+            <div className="flex-1 min-w-[200px]">
+              <label className="text-sm font-medium mb-2 block">Período</label>
+              <Select value={periodoSelecionado} onValueChange={setPeriodoSelecionado}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="semana">Última Semana</SelectItem>
+                  <SelectItem value="mes">Último Mês</SelectItem>
+                  <SelectItem value="trimestre">Último Trimestre</SelectItem>
+                  <SelectItem value="ano">Último Ano</SelectItem>
+                  <SelectItem value="personalizado">Personalizado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {periodoSelecionado === "personalizado" && (
+              <>
+                <div className="flex-1 min-w-[200px]">
+                  <label className="text-sm font-medium mb-2 block">Data Início</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !dataInicio && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dataInicio ? (
+                          format(dataInicio, "PPP", { locale: ptBR })
+                        ) : (
+                          <span>Selecione a data</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={dataInicio}
+                        onSelect={(date) => date && setDataInicio(date)}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="flex-1 min-w-[200px]">
+                  <label className="text-sm font-medium mb-2 block">Data Fim</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !dataFim && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dataFim ? (
+                          format(dataFim, "PPP", { locale: ptBR })
+                        ) : (
+                          <span>Selecione a data</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={dataFim}
+                        onSelect={(date) => date && setDataFim(date)}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-4 text-muted-foreground">A carregar relatórios...</p>
+          </div>
+        </div>
+      ) : (
+        <Tabs defaultValue="financeiro" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="financeiro">
+              <DollarSign className="h-4 w-4 mr-2" />
+              Financeiro
+            </TabsTrigger>
+            <TabsTrigger value="produtividade">
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Produtividade
+            </TabsTrigger>
+            <TabsTrigger value="utentes">
+              <Users className="h-4 w-4 mr-2" />
+              Utentes
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Relatório Financeiro */}
+          <TabsContent value="financeiro" className="space-y-6">
+            {/* Cards de Resumo */}
+            <div className="grid gap-4 md:grid-cols-3">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Receita Total</CardTitle>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {formatCurrency(
+                      parseFloat(relatorioFinanceiro?.resumo?.total?.toString() || "0")
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    No período selecionado
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Receita Paga</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-green-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-green-600">
+                    {formatCurrency(
+                      parseFloat(relatorioFinanceiro?.resumo?.pago?.toString() || "0")
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {((parseFloat(relatorioFinanceiro?.resumo?.pago?.toString() || "0") /
+                      parseFloat(relatorioFinanceiro?.resumo?.total?.toString() || "1")) *
+                      100
+                    ).toFixed(1)}
+                    % do total
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Receita Pendente</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-orange-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-orange-600">
+                    {formatCurrency(
+                      parseFloat(relatorioFinanceiro?.resumo?.pendente?.toString() || "0")
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">A receber</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Receita por Procedimento */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Top 10 Procedimentos por Receita</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {relatorioFinanceiro?.receitaPorProcedimento?.map((proc: any, index: number) => (
+                    <div key={index} className="flex items-center">
+                      <div className="flex-1">
+                        <p className="font-medium">{proc.procedimentoNome}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {proc.quantidade} procedimentos
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold">
+                          {formatCurrency(parseFloat(proc.total?.toString() || "0"))}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Receita por Dentista */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Receita por Dentista</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {relatorioFinanceiro?.receitaPorDentista?.map((dent: any, index: number) => (
+                    <div key={index} className="flex items-center">
+                      <div className="flex-1">
+                        <p className="font-medium">{dent.dentistaNome}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {dent.totalConsultas} consultas • {dent.totalFaturas} faturas
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold">
+                          {formatCurrency(parseFloat(dent.receita?.toString() || "0"))}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Relatório de Produtividade */}
+          <TabsContent value="produtividade" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Consultas por Dentista</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {relatorioProdutividade?.consultasPorDentista?.map((dent: any, index: number) => (
+                    <div key={index} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium">{dent.dentistaNome}</p>
+                        <p className="text-sm font-bold">{dent.totalConsultas} consultas</p>
+                      </div>
+                      <div className="grid grid-cols-4 gap-2 text-sm">
+                        <div>
+                          <p className="text-muted-foreground">Concluídas</p>
+                          <p className="font-medium text-green-600">{dent.consultasConcluidas}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Agendadas</p>
+                          <p className="font-medium">{dent.consultasAgendadas}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Canceladas</p>
+                          <p className="font-medium text-orange-600">{dent.consultasCanceladas}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Faltas</p>
+                          <p className="font-medium text-red-600">{dent.consultasFaltou}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Relatório de Utentes */}
+          <TabsContent value="utentes" className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Novos Utentes</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-4xl font-bold">
+                    {relatorioUtentes?.novosUtentes || 0}
+                  </div>
+                  <p className="text-sm text-muted-foreground">No período selecionado</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Distribuição por Género</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {relatorioUtentes?.distribuicaoPorGenero?.map((gen: any, index: number) => (
+                      <div key={index} className="flex items-center justify-between">
+                        <span className="capitalize">{gen.genero || "Não especificado"}</span>
+                        <span className="font-bold">{gen.total}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Utentes Mais Ativos</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {relatorioUtentes?.utentesMaisAtivos?.map((utente: any, index: number) => (
+                    <div key={index} className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">{utente.utenteNome}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {utente.totalConsultas} consultas
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      )}
+    </div>
+  );
+}
